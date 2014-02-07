@@ -1,9 +1,9 @@
 Overview
 ========
 
-Command line tool for OS X to recursively compare directories.
+DirectoryScanner is a simple and reusable Obj-C class to recursively scan and optionaly compare directories. It comes with a basic test command line tool.
 
 License
 =======
 
-dircmp is available under [New BSD License](LICENSE).
+DirectoryScanner is available under [New BSD License](LICENSE).
