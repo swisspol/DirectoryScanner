@@ -169,9 +169,11 @@ static inline NSDate* NSDateFromTimeSpec(const struct timespec* t) {
     }
   }
   if (options & kComparisonOption_Properties) {
-    if ((_created.tv_sec != otherItem->_created.tv_sec) || (_created.tv_nsec != otherItem->_created.tv_nsec) ||
-        (_modified.tv_sec != otherItem->_modified.tv_sec) || (_modified.tv_nsec != otherItem->_modified.tv_nsec)) {
-      result |= kComparisonResult_Modified_FileDate;
+    if ((_created.tv_sec != otherItem->_created.tv_sec) || (_created.tv_nsec != otherItem->_created.tv_nsec)) {
+      result |= kComparisonResult_Modified_CreationDate;
+    }
+    if ((_modified.tv_sec != otherItem->_modified.tv_sec) || (_modified.tv_nsec != otherItem->_modified.tv_nsec)) {
+      result |= kComparisonResult_Modified_ModificationDate;
     }
   }
   return result;

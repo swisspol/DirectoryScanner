@@ -85,8 +85,8 @@ int main(int argc, const char* argv[]) {
                        result & kComparisonResult_Modified_Permissions ? 'p' : '~',
                        result & kComparisonResult_Modified_GroupID ? 'g' : '~',
                        result & kComparisonResult_Modified_UserID ? 'u' : '~',
+                       result & (kComparisonResult_Modified_CreationDate | kComparisonResult_Modified_ModificationDate) ? 'd' : '~',
                        result & kComparisonResult_Modified_FileSize ? 's' : '~',
-                       result & kComparisonResult_Modified_FileDate ? 'd' : '~',
                        result & kComparisonResult_Modified_FileContent ? 'c' : '~',
                        NO,
                        skipInvisible);

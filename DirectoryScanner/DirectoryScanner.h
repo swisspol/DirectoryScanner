@@ -38,9 +38,10 @@ typedef enum {
   kComparisonResult_Modified_Permissions = (1 << 0),  // Requires "kComparisonOption_Ownership" option
   kComparisonResult_Modified_GroupID = (1 << 1),  // Requires "kComparisonOption_Ownership" option
   kComparisonResult_Modified_UserID = (1 << 2),  // Requires "kComparisonOption_Ownership" option
-  kComparisonResult_Modified_FileSize = (1 << 3),  // Requires "kComparisonOption_Properties" option
-  kComparisonResult_Modified_FileDate = (1 << 4),  // Requires "kComparisonOption_Properties" option
-  kComparisonResult_Modified_FileContent = (1 << 5),  // Requires "kComparisonOption_Content" option
+  kComparisonResult_Modified_CreationDate = (1 << 3),  // Requires "kComparisonOption_Properties" option
+  kComparisonResult_Modified_ModificationDate = (1 << 4),  // Requires "kComparisonOption_Properties" option
+  kComparisonResult_Modified_FileSize = (1 << 5),  // Requires "kComparisonOption_Properties" option
+  kComparisonResult_Modified_FileContent = (1 << 6),  // Requires "kComparisonOption_Content" option
   kComparisonResult_Removed = (1 << 16),
   kComparisonResult_Added = (1 << 17),
   kComparisonResult_Replaced = (1 << 18)
