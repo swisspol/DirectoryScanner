@@ -51,6 +51,12 @@ typedef struct {
 
 #pragma pack(pop)
 
+@interface Item ()
+@property(nonatomic, readonly) mode_t mode;
+@property(nonatomic, readonly) struct timespec created;
+@property(nonatomic, readonly) struct timespec modified;
+@end
+
 #if __USE_GETATTRLIST__
 static struct attrlist _attributeList = {0};
 #endif
@@ -77,11 +83,13 @@ static inline BOOL _GetAttributes(const char* path, Attributes* attributes) {
   return NO;
 }
 
-static inline NSTimeInterval NSTimeIntervalFromTimeSpec(const struct timespec* t) {
-  return (NSTimeInterval)t->tv_sec + (NSTimeInterval)t->tv_nsec / 1000000000.0 - NSTimeIntervalSince1970;
+static inline NSDate* NSDateFromTimeSpec(const struct timespec* t) {
+  return [NSDate dateWithTimeIntervalSince1970:((NSTimeInterval)t->tv_sec + (NSTimeInterval)t->tv_nsec / 1000000000.0)];
 }
 
 @implementation Item
+
+@synthesize userID = _uid, groupID = _gid;
 
 #if __USE_GETATTRLIST__
 
@@ -111,23 +119,28 @@ static inline NSTimeInterval NSTimeIntervalFromTimeSpec(const struct timespec* t
 - (id)initWithParent:(DirectoryItem*)parent path:(const char*)path base:(size_t)base name:(const char*)name attributes:(const Attributes*)attributes {
   if ((self = [super init])) {
     _parent = parent;
-    _absolutePath = strdup(path);
-    _relativePath = (parent ? &_absolutePath[base + 1] : &_absolutePath[base]);
-    _name = strdup(name);
+    _absolutePath = [[NSString alloc] initWithUTF8String:path];
+    _relativePath = [[NSString alloc] initWithUTF8String:(parent ? &path[base + 1] : &path[base])];
+    _name = [[NSString alloc] initWithUTF8String:name];
     _mode = attributes->mode;
     _uid = attributes->uid;
     _gid = attributes->gid;
+    _created = attributes->created;
+    _modified = attributes->modified;
   }
   return self;
 }
 
-- (void)dealloc {
-  if (_absolutePath) {
-    free((void*)_absolutePath);
-  }
-  if (_name) {
-    free((void*)_name);
-  }
+- (short)posixPermissions {
+  return (_mode & ALLPERMS);
+}
+
+- (NSDate*)creationDate {
+  return NSDateFromTimeSpec(&_created);
+}
+
+- (NSDate*)modificationDate {
+  return NSDateFromTimeSpec(&_modified);
 }
 
 - (BOOL)isDirectory {
@@ -142,16 +155,24 @@ static inline NSTimeInterval NSTimeIntervalFromTimeSpec(const struct timespec* t
   return (_mode & S_IFMT) == S_IFLNK;
 }
 
-- (ComparisonResult)compareOwnership:(Item*)otherItem {
+- (ComparisonResult)compareItem:(Item*)otherItem options:(ComparisonOptions)options {
   ComparisonResult result = 0;
-  if ((_mode & ALLPERMS) != (otherItem->_mode & ALLPERMS)) {
-    result |= kComparisonResult_Modified_Permissions;
+  if (options & kComparisonOption_Ownership) {
+    if ((_mode & ALLPERMS) != (otherItem->_mode & ALLPERMS)) {
+      result |= kComparisonResult_Modified_Permissions;
+    }
+    if (_gid != otherItem->_gid) {
+      result |= kComparisonResult_Modified_GroupID;
+    }
+    if (_uid != otherItem->_uid) {
+      result |= kComparisonResult_Modified_UserID;
+    }
   }
-  if (_gid != otherItem->_gid) {
-    result |= kComparisonResult_Modified_GroupID;
-  }
-  if (_uid != otherItem->_uid) {
-    result |= kComparisonResult_Modified_UserID;
+  if (options & kComparisonOption_Properties) {
+    if ((_created.tv_sec != otherItem->_created.tv_sec) || (_created.tv_nsec != otherItem->_created.tv_nsec) ||
+        (_modified.tv_sec != otherItem->_modified.tv_sec) || (_modified.tv_nsec != otherItem->_modified.tv_nsec)) {
+      result |= kComparisonResult_Modified_FileDate;
+    }
   }
   return result;
 }
@@ -163,23 +184,15 @@ static inline NSTimeInterval NSTimeIntervalFromTimeSpec(const struct timespec* t
 - (id)initWithParent:(DirectoryItem*)parent path:(const char*)path base:(size_t)base name:(const char*)name attributes:(const Attributes*)attributes {
   if ((self = [super initWithParent:parent path:path base:base name:name attributes:attributes])) {
     _size = attributes->size;
-    _created = NSTimeIntervalFromTimeSpec(&attributes->created);
-    _modified = NSTimeIntervalFromTimeSpec(&attributes->modified);
   }
   return self;
 }
 
 - (ComparisonResult)compareFile:(FileItem*)otherFile options:(ComparisonOptions)options {
-  ComparisonResult result = 0;
-  if (options & kComparisonOption_Ownership) {
-    result |= [self compareOwnership:otherFile];
-  }
+  ComparisonResult result = [self compareItem:otherFile options:options];
   if (options & kComparisonOption_Properties) {
     if (_size != otherFile->_size) {
       result |= kComparisonResult_Modified_FileSize;
-    }
-    if ((_created != otherFile->_created) || (_modified != otherFile->_modified)) {
-      result |= kComparisonResult_Modified_FileDate;
     }
   }
   if (options & kComparisonOption_Content) {
@@ -187,19 +200,19 @@ static inline NSTimeInterval NSTimeIntervalFromTimeSpec(const struct timespec* t
       if (_size == otherFile->_size) {
         
         char link[PATH_MAX + 1];
-        ssize_t length = readlink(self.absolutePath, link, PATH_MAX);
+        ssize_t length = readlink([self.absolutePath UTF8String], link, PATH_MAX);
         if (length >= 0) {
           link[length] = 0;
         } else {
-          NSLog(@"Failed reading symlink \"%s\" (%s)", self.absolutePath, strerror(errno));
+          NSLog(@"Failed reading symlink \"%@\" (%s)", self.absolutePath, strerror(errno));
         }
         
         char otherLink[PATH_MAX + 1];
-        ssize_t otherLength = readlink(otherFile.absolutePath, otherLink, PATH_MAX);
+        ssize_t otherLength = readlink([otherFile.absolutePath UTF8String], otherLink, PATH_MAX);
         if (otherLength >= 0) {
           otherLink[otherLength] = 0;
         } else {
-          NSLog(@"Failed reading symlink \"%s\" (%s)", otherFile.absolutePath, strerror(errno));
+          NSLog(@"Failed reading symlink \"%@\" (%s)", otherFile.absolutePath, strerror(errno));
         }
         
         if ((length < 0) || (otherLength < 0) || strcmp(link, otherLink)) {
@@ -212,19 +225,19 @@ static inline NSTimeInterval NSTimeIntervalFromTimeSpec(const struct timespec* t
       if (_size == otherFile->_size) {
         
         unsigned char md5[16];
-        NSData* data = [NSData dataWithContentsOfFile:[NSString stringWithUTF8String:self.absolutePath] options:(NSDataReadingMappedIfSafe | NSDataReadingUncached) error:NULL];
+        NSData* data = [NSData dataWithContentsOfFile:self.absolutePath options:(NSDataReadingMappedIfSafe | NSDataReadingUncached) error:NULL];
         if (data) {
           CC_MD5(data.bytes, data.length, md5);
         } else {
-          NSLog(@"Failed reading file \"%s\"", self.absolutePath);
+          NSLog(@"Failed reading file \"%@\"", self.absolutePath);
         }
         
         unsigned char otherMd5[16];
-        NSData* otherData = [NSData dataWithContentsOfFile:[NSString stringWithUTF8String:otherFile.absolutePath] options:(NSDataReadingMappedIfSafe | NSDataReadingUncached) error:NULL];
+        NSData* otherData = [NSData dataWithContentsOfFile:otherFile.absolutePath options:(NSDataReadingMappedIfSafe | NSDataReadingUncached) error:NULL];
         if (otherData) {
           CC_MD5(otherData.bytes, otherData.length, otherMd5);
         } else {
-          NSLog(@"Failed reading file \"%s\"", otherFile.absolutePath);
+          NSLog(@"Failed reading file \"%@\"", otherFile.absolutePath);
         }
         
         if (!data || !otherData || memcmp(md5, otherMd5, 16)) {
@@ -291,8 +304,7 @@ static inline NSTimeInterval NSTimeIntervalFromTimeSpec(const struct timespec* t
       
       // opendir() enumeration order is not guaranteed depending on file systems so always sort children
       [(NSMutableArray*)_children sortUsingComparator:^NSComparisonResult(Item* item1, Item* item2) {
-        int result = strcmp(item1.name, item2.name);
-        return (result > 0 ? NSOrderedDescending : (result < 0 ? NSOrderedAscending : NSOrderedSame));
+        return [item1.name caseInsensitiveCompare:item2.name];
       }];
     } else {
       NSLog(@"Failed opening directory \"%s\" (%s)", path, strerror(errno));
@@ -331,23 +343,19 @@ static inline NSTimeInterval NSTimeIntervalFromTimeSpec(const struct timespec* t
 
 - (void)compareDirectory:(DirectoryItem*)otherDirectory options:(ComparisonOptions)options withBlock:(void (^)(ComparisonResult result, Item* item, Item* otherItem))block {
   if (self.parent) {
-    ComparisonResult result = 0;
-    if (options & kComparisonOption_Ownership) {
-      result |= [self compareOwnership:otherDirectory];
-    }
-    block(result, self, otherDirectory);
+    block([self compareItem:otherDirectory options:options], self, otherDirectory);
   }
   
   NSArray* otherChildren = otherDirectory.children;
   NSUInteger start = 0;
   NSUInteger end = otherChildren.count;
   for (Item* item in _children) {
-    const char* name = item.name;
+    NSString* name = item.name;
     for (NSUInteger i = start; i < end; ++i) {
       Item* otherItem = (Item*)[otherChildren objectAtIndex:i];
-      const char* otherName = otherItem.name;
-      int result = strcmp(name, otherName);
-      if (result == 0) {
+      NSString* otherName = otherItem.name;
+      NSComparisonResult result = [name caseInsensitiveCompare:otherName];
+      if (result == NSOrderedSame) {
         if ([item isFile] && [otherItem isFile]) {
           block([(FileItem*)item compareFile:(FileItem*)otherItem options:options], item, otherItem);
         } else if ([item isSymLink] && [otherItem isSymLink]) {
@@ -361,11 +369,11 @@ static inline NSTimeInterval NSTimeIntervalFromTimeSpec(const struct timespec* t
         }
         start = i + 1;
         break;
-      } else if (result < 0) {
+      } else if (result == NSOrderedAscending) {
         block(kComparisonResult_Removed, item, nil);
         start = i;
         break;
-      } else {
+      } else {  // NSOrderedDescending
         block(kComparisonResult_Added, nil, otherItem);
       }
     }

@@ -30,21 +30,21 @@
 #import "DirectoryScanner.h"
 
 static inline void _PrintItem(Item* item, char c1, char c2, char c3, char c4, char c5, char c6, BOOL recursive, BOOL skipInvisible) {
-  if (skipInvisible && (item.name[0] == '.')) {
+  if (skipInvisible && [item.name hasPrefix:@"."]) {
     return;
   }
   if ([item isDirectory]) {
-    fprintf(stdout, "[%c%c%c%c%c%c] %s/\n", c1, c2, c3, c4, c5, c6, item.relativePath);
+    fprintf(stdout, "[%c%c%c%c%c%c] %s/\n", c1, c2, c3, c4, c5, c6, [item.relativePath UTF8String]);
     if (recursive) {
       [(DirectoryItem*)item enumerateChildrenRecursivelyUsingBlock:^(Item* item) {
-        if (skipInvisible && (item.name[0] == '.')) {
+        if (skipInvisible && [item.name hasPrefix:@"."]) {
           return;
         }
-        fprintf(stdout, "[%c%c%c%c%c%c] %s\n", c1, c2, c3, c4, c5, c6, item.relativePath);
+        fprintf(stdout, "[%c%c%c%c%c%c] %s\n", c1, c2, c3, c4, c5, c6, [item.relativePath UTF8String]);
       }];
     }
   } else {
-    fprintf(stdout, "[%c%c%c%c%c%c] %s\n", c1, c2, c3, c4, c5, c6, item.relativePath);
+    fprintf(stdout, "[%c%c%c%c%c%c] %s\n", c1, c2, c3, c4, c5, c6, [item.relativePath UTF8String]);
   }
 }
 

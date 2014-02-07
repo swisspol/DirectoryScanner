@@ -51,12 +51,14 @@ typedef enum {
 
 @interface Item : NSObject
 @property(weak, nonatomic, readonly) DirectoryItem* parent;
-@property(nonatomic, readonly) const char* absolutePath;
-@property(nonatomic, readonly) const char* relativePath;
-@property(nonatomic, readonly) const char* name;
-@property(nonatomic, readonly) mode_t mode;
-@property(nonatomic, readonly) uid_t uid;
-@property(nonatomic, readonly) gid_t gid;
+@property(nonatomic, readonly) NSString* absolutePath;
+@property(nonatomic, readonly) NSString* relativePath;
+@property(nonatomic, readonly) NSString* name;
+@property(nonatomic, readonly) unsigned long userID;
+@property(nonatomic, readonly) unsigned long groupID;
+@property(nonatomic, readonly) short posixPermissions;
+@property(nonatomic, readonly) NSDate* creationDate;
+@property(nonatomic, readonly) NSDate* modificationDate;
 - (id)initWithPath:(NSString*)path;
 - (BOOL)isDirectory;
 - (BOOL)isFile;
@@ -64,9 +66,7 @@ typedef enum {
 @end
 
 @interface FileItem : Item
-@property(nonatomic, readonly) off_t size;
-@property(nonatomic, readonly) NSTimeInterval created;
-@property(nonatomic, readonly) NSTimeInterval modified;
+@property(nonatomic, readonly) unsigned long long size;
 @end
 
 @interface DirectoryItem : Item
