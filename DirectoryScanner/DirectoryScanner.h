@@ -45,7 +45,7 @@ typedef enum {
   kComparisonResult_Added = (1 << 17),
   kComparisonResult_Replaced = (1 << 18)
 } ComparisonResult;
-#define kComparisonResult_ModifiedMask 0xF
+#define kComparisonResult_ModifiedMask 0xFFFF
 
 @class DirectoryItem;
 
