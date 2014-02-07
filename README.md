@@ -1,7 +1,7 @@
 Overview
 ========
 
-DirectoryScanner is a simple and reusable Obj-C class to recursively scan and optionaly compare directories. It comes with a basic test command line tool.
+DirectoryScanner is a simple and reusable Obj-C class to recursively scan and optionaly compare directories. It comes with a basic command line tool for testing.
 
 License
 =======
