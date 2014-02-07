@@ -100,7 +100,6 @@ int main(int argc, const char* argv[]) {
           } else if (!skipEqual) {
             _PrintItem(item, '=', '=', '=', '=', '=', '=', YES, skipInvisible);
           }
-          
         }];
         return 0;
       }
