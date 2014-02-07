@@ -54,8 +54,8 @@ typedef enum {
 @property(nonatomic, readonly) NSString* absolutePath;
 @property(nonatomic, readonly) NSString* relativePath;
 @property(nonatomic, readonly) NSString* name;
-@property(nonatomic, readonly) unsigned long userID;
-@property(nonatomic, readonly) unsigned long groupID;
+@property(nonatomic, readonly) unsigned int userID;
+@property(nonatomic, readonly) unsigned int groupID;
 @property(nonatomic, readonly) short posixPermissions;
 @property(nonatomic, readonly) NSDate* creationDate;
 @property(nonatomic, readonly) NSDate* modificationDate;
