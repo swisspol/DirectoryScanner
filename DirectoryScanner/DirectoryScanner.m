@@ -168,7 +168,7 @@ static inline NSDate* NSDateFromTimeSpec(const struct timespec* t) {
       result |= kComparisonResult_Modified_UserID;
     }
   }
-  if (options & kComparisonOption_Properties) {
+  if (options & kComparisonOption_Dates) {
     if ((_created.tv_sec != otherItem->_created.tv_sec) || (_created.tv_nsec != otherItem->_created.tv_nsec)) {
       result |= kComparisonResult_Modified_CreationDate;
     }
@@ -192,12 +192,12 @@ static inline NSDate* NSDateFromTimeSpec(const struct timespec* t) {
 
 - (ComparisonResult)compareFile:(FileItem*)otherFile options:(ComparisonOptions)options {
   ComparisonResult result = [self compareItem:otherFile options:options];
-  if (options & kComparisonOption_Properties) {
+  if (options & kComparisonOption_FileSize) {
     if (_size != otherFile->_size) {
       result |= kComparisonResult_Modified_FileSize;
     }
   }
-  if (options & kComparisonOption_Content) {
+  if (options & kComparisonOption_FileContent) {
     if ([self isSymLink] && [otherFile isSymLink]) {
       if (_size == otherFile->_size) {
         
