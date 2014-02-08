@@ -28,21 +28,17 @@
 #import <Foundation/Foundation.h>
 
 typedef enum {
-  kComparisonOption_Ownership = (1 << 0),
-  kComparisonOption_Dates = (1 << 1),
-  kComparisonOption_FileSize = (1 << 2),
-  kComparisonOption_FileContent = (1 << 3),
-  kComparisonOption_All = (kComparisonOption_Ownership | kComparisonOption_Dates | kComparisonOption_FileSize | kComparisonOption_FileContent)
+  kComparisonOption_FileContent = (1 << 0)
 } ComparisonOptions;
 
 typedef enum {
-  kComparisonResult_Modified_Permissions = (1 << 0),  // Requires "kComparisonOption_Ownership" option
-  kComparisonResult_Modified_GroupID = (1 << 1),  // Requires "kComparisonOption_Ownership" option
-  kComparisonResult_Modified_UserID = (1 << 2),  // Requires "kComparisonOption_Ownership" option
-  kComparisonResult_Modified_CreationDate = (1 << 3),  // Requires "kComparisonOption_Dates" option
-  kComparisonResult_Modified_ModificationDate = (1 << 4),  // Requires "kComparisonOption_Dates" option
-  kComparisonResult_Modified_FileSize = (1 << 5),  // Requires "kComparisonOption_FileSize" option
-  kComparisonResult_Modified_FileContent = (1 << 6),  // Requires "kComparisonOption_FileContent" option
+  kComparisonResult_Modified_Permissions = (1 << 0),
+  kComparisonResult_Modified_GroupID = (1 << 1),
+  kComparisonResult_Modified_UserID = (1 << 2),
+  kComparisonResult_Modified_CreationDate = (1 << 3),
+  kComparisonResult_Modified_ModificationDate = (1 << 4),
+  kComparisonResult_Modified_FileSize = (1 << 5),
+  kComparisonResult_Modified_FileContent = (1 << 6),
   kComparisonResult_Removed = (1 << 16),
   kComparisonResult_Added = (1 << 17),
   kComparisonResult_Replaced = (1 << 18)

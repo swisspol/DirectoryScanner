@@ -157,24 +157,20 @@ static inline NSDate* NSDateFromTimeSpec(const struct timespec* t) {
 
 - (ComparisonResult)compareItem:(Item*)otherItem options:(ComparisonOptions)options {
   ComparisonResult result = 0;
-  if (options & kComparisonOption_Ownership) {
-    if ((_mode & ALLPERMS) != (otherItem->_mode & ALLPERMS)) {
-      result |= kComparisonResult_Modified_Permissions;
-    }
-    if (_gid != otherItem->_gid) {
-      result |= kComparisonResult_Modified_GroupID;
-    }
-    if (_uid != otherItem->_uid) {
-      result |= kComparisonResult_Modified_UserID;
-    }
+  if ((_mode & ALLPERMS) != (otherItem->_mode & ALLPERMS)) {
+    result |= kComparisonResult_Modified_Permissions;
   }
-  if (options & kComparisonOption_Dates) {
-    if ((_created.tv_sec != otherItem->_created.tv_sec) || (_created.tv_nsec != otherItem->_created.tv_nsec)) {
-      result |= kComparisonResult_Modified_CreationDate;
-    }
-    if ((_modified.tv_sec != otherItem->_modified.tv_sec) || (_modified.tv_nsec != otherItem->_modified.tv_nsec)) {
-      result |= kComparisonResult_Modified_ModificationDate;
-    }
+  if (_gid != otherItem->_gid) {
+    result |= kComparisonResult_Modified_GroupID;
+  }
+  if (_uid != otherItem->_uid) {
+    result |= kComparisonResult_Modified_UserID;
+  }
+  if ((_created.tv_sec != otherItem->_created.tv_sec) || (_created.tv_nsec != otherItem->_created.tv_nsec)) {
+    result |= kComparisonResult_Modified_CreationDate;
+  }
+  if ((_modified.tv_sec != otherItem->_modified.tv_sec) || (_modified.tv_nsec != otherItem->_modified.tv_nsec)) {
+    result |= kComparisonResult_Modified_ModificationDate;
   }
   return result;
 }
@@ -192,10 +188,8 @@ static inline NSDate* NSDateFromTimeSpec(const struct timespec* t) {
 
 - (ComparisonResult)compareFile:(FileItem*)otherFile options:(ComparisonOptions)options {
   ComparisonResult result = [self compareItem:otherFile options:options];
-  if (options & kComparisonOption_FileSize) {
-    if (_size != otherFile->_size) {
-      result |= kComparisonResult_Modified_FileSize;
-    }
+  if (_size != otherFile->_size) {
+    result |= kComparisonResult_Modified_FileSize;
   }
   if (options & kComparisonOption_FileContent) {
     if ([self isSymLink] && [otherFile isSymLink]) {

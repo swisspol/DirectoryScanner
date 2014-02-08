@@ -63,9 +63,6 @@ int main(int argc, const char* argv[]) {
           switch (*option) {
             case 'e': skipEqual = YES; break;
             case 'i': skipInvisible = YES; break;
-            case 'o': options |= kComparisonOption_Ownership; break;
-            case 'd': options |= kComparisonOption_Dates; break;
-            case 's': options |= kComparisonOption_FileSize; break;
             case 'c': options |= kComparisonOption_FileContent; break;
           }
           ++option;
@@ -105,7 +102,7 @@ int main(int argc, const char* argv[]) {
         return 0;
       }
     } else {
-      fprintf(stdout, "Usage: %s [-v] [-i] [-o] [-d] [-s] [-c] sourceDirectory destinationDirectory\n", basename((char*)argv[0]));
+      fprintf(stdout, "Usage: %s [-e] [-i] [-c] sourceDirectory destinationDirectory\n", basename((char*)argv[0]));
     }
   }
   return 1;
