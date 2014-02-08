@@ -38,7 +38,7 @@ typedef enum {
   kComparisonResult_Modified_CreationDate = (1 << 3),
   kComparisonResult_Modified_ModificationDate = (1 << 4),
   kComparisonResult_Modified_FileSize = (1 << 5),
-  kComparisonResult_Modified_FileContent = (1 << 6),
+  kComparisonResult_Modified_FileContent = (1 << 6),  // Requires "kComparisonOption_FileContent" option
   kComparisonResult_Removed = (1 << 16),
   kComparisonResult_Added = (1 << 17),
   kComparisonResult_Replaced = (1 << 18)
