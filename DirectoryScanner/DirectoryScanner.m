@@ -35,6 +35,8 @@
 
 #define __USE_GETATTRLIST__ 1
 
+#define kResourceForkPath @"..namedfork/rsrc"
+
 #pragma pack(push, 1)
 
 typedef struct {
@@ -46,7 +48,8 @@ typedef struct {
   uid_t uid;
   gid_t gid;
   u_int32_t mode;
-  off_t size;
+  off_t dataSize;
+  off_t rsrcSize;
 } Attributes;
 
 #pragma pack(pop)
@@ -70,13 +73,14 @@ static inline BOOL _GetAttributes(const char* path, Attributes* attributes) {
 #endif
   {
 #if !__USE_GETATTRLIST__
-    attributes->created.tv_sec = 0;
-    attributes->created.tv_nsec = 0;
+    attributes->created.tv_sec = 0;  // N/A
+    attributes->created.tv_nsec = 0;  // N/A
     attributes->modified = info.st_mtimespec;
     attributes->uid = info.st_uid;
     attributes->gid = info.st_gid;
     attributes->mode = info.st_mode;
-    attributes->size = info.st_size;
+    attributes->dataSize = info.st_size;
+    attributes->rsrcSize = 0;  // N/A
 #endif
     return YES;
   }
@@ -97,7 +101,7 @@ static inline NSDate* NSDateFromTimeSpec(const struct timespec* t) {
   if (self == [Item class]) {
     _attributeList.bitmapcount = ATTR_BIT_MAP_COUNT;
     _attributeList.commonattr = ATTR_CMN_CRTIME | ATTR_CMN_MODTIME | ATTR_CMN_OWNERID | ATTR_CMN_GRPID | ATTR_CMN_ACCESSMASK;
-    _attributeList.fileattr = ATTR_FILE_DATALENGTH;
+    _attributeList.fileattr = ATTR_FILE_DATALENGTH | ATTR_FILE_RSRCLENGTH;
   }
 }
 
@@ -181,66 +185,77 @@ static inline NSDate* NSDateFromTimeSpec(const struct timespec* t) {
 
 - (id)initWithParent:(DirectoryItem*)parent path:(const char*)path base:(size_t)base name:(const char*)name attributes:(const Attributes*)attributes {
   if ((self = [super initWithParent:parent path:path base:base name:name attributes:attributes])) {
-    _size = attributes->size;
+    _dataSize = attributes->dataSize;
+    _resourceSize = attributes->rsrcSize;
   }
   return self;
 }
 
+static BOOL _CompareSymLinks(NSString* path, NSString* otherPath) {
+  char link[PATH_MAX + 1];
+  ssize_t length = readlink([path UTF8String], link, PATH_MAX);
+  if (length >= 0) {
+    link[length] = 0;
+  } else {
+    NSLog(@"Failed reading symlink \"%@\" (%s)", path, strerror(errno));
+  }
+  
+  char otherLink[PATH_MAX + 1];
+  ssize_t otherLength = readlink([otherPath UTF8String], otherLink, PATH_MAX);
+  if (otherLength >= 0) {
+    otherLink[otherLength] = 0;
+  } else {
+    NSLog(@"Failed reading symlink \"%@\" (%s)", otherPath, strerror(errno));
+  }
+  
+  if ((length < 0) || (otherLength < 0) || strcmp(link, otherLink)) {
+    return NO;
+  }
+  return YES;
+}
+
+static BOOL _CompareFiles(NSString* path, NSString* otherPath) {
+  unsigned char md5[16];
+  NSData* data = [NSData dataWithContentsOfFile:path options:(NSDataReadingMappedIfSafe | NSDataReadingUncached) error:NULL];
+  if (data) {
+    CC_MD5(data.bytes, data.length, md5);
+  } else {
+    NSLog(@"Failed reading file \"%@\"", path);
+  }
+  
+  unsigned char otherMd5[16];
+  NSData* otherData = [NSData dataWithContentsOfFile:otherPath options:(NSDataReadingMappedIfSafe | NSDataReadingUncached) error:NULL];
+  if (otherData) {
+    CC_MD5(otherData.bytes, otherData.length, otherMd5);
+  } else {
+    NSLog(@"Failed reading file \"%@\"", otherPath);
+  }
+  
+  if (!data || !otherData || memcmp(md5, otherMd5, 16)) {
+    return NO;
+  }
+  return YES;
+}
+
 - (ComparisonResult)compareFile:(FileItem*)otherFile options:(ComparisonOptions)options {
   ComparisonResult result = [self compareItem:otherFile options:options];
-  if (_size != otherFile->_size) {
-    result |= kComparisonResult_Modified_FileSize;
+  if (_dataSize != otherFile->_dataSize) {
+    result |= kComparisonResult_Modified_FileDataSize;
+  }
+  if (_resourceSize != otherFile->_resourceSize) {
+    result |= kComparisonResult_Modified_FileResourceSize;
   }
   if (options & kComparisonOption_FileContent) {
     if ([self isSymLink] && [otherFile isSymLink]) {
-      if (_size == otherFile->_size) {
-        
-        char link[PATH_MAX + 1];
-        ssize_t length = readlink([self.absolutePath UTF8String], link, PATH_MAX);
-        if (length >= 0) {
-          link[length] = 0;
-        } else {
-          NSLog(@"Failed reading symlink \"%@\" (%s)", self.absolutePath, strerror(errno));
-        }
-        
-        char otherLink[PATH_MAX + 1];
-        ssize_t otherLength = readlink([otherFile.absolutePath UTF8String], otherLink, PATH_MAX);
-        if (otherLength >= 0) {
-          otherLink[otherLength] = 0;
-        } else {
-          NSLog(@"Failed reading symlink \"%@\" (%s)", otherFile.absolutePath, strerror(errno));
-        }
-        
-        if ((length < 0) || (otherLength < 0) || strcmp(link, otherLink)) {
-          result |= kComparisonResult_Modified_FileContent;
-        }
-      } else {
-        result |= kComparisonResult_Modified_FileContent;
+      if ((_dataSize != otherFile->_dataSize) || !_CompareSymLinks(self.absolutePath, otherFile.absolutePath)) {
+        result |= kComparisonResult_Modified_FileDataContent;
       }
     } else if ([self isFile] && [otherFile isFile]) {
-      if (_size == otherFile->_size) {
-        
-        unsigned char md5[16];
-        NSData* data = [NSData dataWithContentsOfFile:self.absolutePath options:(NSDataReadingMappedIfSafe | NSDataReadingUncached) error:NULL];
-        if (data) {
-          CC_MD5(data.bytes, data.length, md5);
-        } else {
-          NSLog(@"Failed reading file \"%@\"", self.absolutePath);
-        }
-        
-        unsigned char otherMd5[16];
-        NSData* otherData = [NSData dataWithContentsOfFile:otherFile.absolutePath options:(NSDataReadingMappedIfSafe | NSDataReadingUncached) error:NULL];
-        if (otherData) {
-          CC_MD5(otherData.bytes, otherData.length, otherMd5);
-        } else {
-          NSLog(@"Failed reading file \"%@\"", otherFile.absolutePath);
-        }
-        
-        if (!data || !otherData || memcmp(md5, otherMd5, 16)) {
-          result |= kComparisonResult_Modified_FileContent;
-        }
-      } else {
-        result |= kComparisonResult_Modified_FileContent;
+      if ((_dataSize != otherFile->_dataSize) || ((_dataSize > 0) && !_CompareFiles(self.absolutePath, otherFile.absolutePath))) {
+        result |= kComparisonResult_Modified_FileDataContent;
+      }
+      if ((_resourceSize != otherFile->_resourceSize) || ((_resourceSize > 0) && !_CompareFiles([self.absolutePath stringByAppendingPathComponent:kResourceForkPath], [otherFile.absolutePath stringByAppendingPathComponent:kResourceForkPath]))) {
+        result |= kComparisonResult_Modified_FileResourceContent;
       }
     } else {
       abort();  // Should not happen

@@ -84,8 +84,8 @@ int main(int argc, const char* argv[]) {
                        result & kComparisonResult_Modified_GroupID ? 'g' : '~',
                        result & kComparisonResult_Modified_UserID ? 'u' : '~',
                        result & (kComparisonResult_Modified_CreationDate | kComparisonResult_Modified_ModificationDate) ? 'd' : '~',
-                       result & kComparisonResult_Modified_FileSize ? 's' : '~',
-                       result & kComparisonResult_Modified_FileContent ? 'c' : '~',
+                       result & (kComparisonResult_Modified_FileDataSize | kComparisonResult_Modified_FileResourceSize) ? 's' : '~',
+                       result & (kComparisonResult_Modified_FileDataContent | kComparisonResult_Modified_FileResourceContent) ? 'c' : '~',
                        NO,
                        skipInvisible);
           } else if (result & kComparisonResult_Removed) {

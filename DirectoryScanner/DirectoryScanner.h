@@ -37,8 +37,10 @@ typedef enum {
   kComparisonResult_Modified_UserID = (1 << 2),
   kComparisonResult_Modified_CreationDate = (1 << 3),
   kComparisonResult_Modified_ModificationDate = (1 << 4),
-  kComparisonResult_Modified_FileSize = (1 << 5),
-  kComparisonResult_Modified_FileContent = (1 << 6),  // Requires "kComparisonOption_FileContent" option
+  kComparisonResult_Modified_FileDataSize = (1 << 5),
+  kComparisonResult_Modified_FileResourceSize = (1 << 6),
+  kComparisonResult_Modified_FileDataContent = (1 << 7),  // Requires "kComparisonOption_FileContent" option
+  kComparisonResult_Modified_FileResourceContent = (1 << 8),  // Requires "kComparisonOption_FileContent" option
   kComparisonResult_Removed = (1 << 16),
   kComparisonResult_Added = (1 << 17),
   kComparisonResult_Replaced = (1 << 18)
@@ -64,7 +66,8 @@ typedef enum {
 @end
 
 @interface FileItem : Item
-@property(nonatomic, readonly) unsigned long long size;
+@property(nonatomic, readonly) unsigned long long dataSize;
+@property(nonatomic, readonly) unsigned long long resourceSize;
 @end
 
 @interface DirectoryItem : Item
