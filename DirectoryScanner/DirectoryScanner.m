@@ -64,6 +64,10 @@ typedef struct {
 static struct attrlist _attributeList = {0};
 #endif
 
+static inline NSComparisonResult _CompareStrings(NSString* s1, NSString* s2) {
+  return [s1 compare:s2 options:(NSCaseInsensitiveSearch | NSNumericSearch | NSWidthInsensitiveSearch)];  // Same as -localizedStandardCompare: minus NSForcedOrderingSearch
+}
+
 static inline BOOL _GetAttributes(const char* path, Attributes* attributes) {
 #if __USE_GETATTRLIST__
   if (getattrlist(path, &_attributeList, attributes, sizeof(Attributes), FSOPT_NOFOLLOW) == 0)
@@ -313,9 +317,8 @@ static BOOL _CompareFiles(NSString* path, NSString* otherPath) {
       }
       closedir(directory);
       
-      // opendir() enumeration order is not guaranteed depending on file systems so always sort children
       [(NSMutableArray*)_children sortUsingComparator:^NSComparisonResult(Item* item1, Item* item2) {
-        return [item1.name caseInsensitiveCompare:item2.name];
+        return _CompareStrings(item1.name, item2.name);
       }];
     } else {
       NSLog(@"Failed opening directory \"%s\" (%s)", path, strerror(errno));
@@ -365,7 +368,7 @@ static BOOL _CompareFiles(NSString* path, NSString* otherPath) {
     for (NSUInteger i = start; i < end; ++i) {
       Item* otherItem = (Item*)[otherChildren objectAtIndex:i];
       NSString* otherName = otherItem.name;
-      NSComparisonResult result = [name caseInsensitiveCompare:otherName];
+      NSComparisonResult result = _CompareStrings(name, otherName);
       if (result == NSOrderedSame) {
         if ([item isFile] && [otherItem isFile]) {
           block([(FileItem*)item compareFile:(FileItem*)otherItem options:options], item, otherItem);
