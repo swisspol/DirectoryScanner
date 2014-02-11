@@ -35,6 +35,7 @@
 
 #define __USE_GETATTRLIST__ 1
 
+#define kFileCompareIOBufferSize (256 * 1024)  // Optimal size seems to be 64 KB for SSDs but 256 KB for HDDs
 #define kResourceForkPath @"..namedfork/rsrc"
 
 #pragma pack(push, 1)
@@ -203,50 +204,78 @@ static inline NSDate* NSDateFromTimeSpec(const struct timespec* t) {
   return self;
 }
 
-static BOOL _CompareSymLinks(NSString* path, NSString* otherPath) {
-  char link[PATH_MAX + 1];
-  ssize_t length = readlink(_NSStringToPath(path), link, PATH_MAX);
-  if (length >= 0) {
-    link[length] = 0;
+static BOOL _CompareSymLinks(NSString* path1, NSString* path2) {
+  char link1[PATH_MAX + 1];
+  ssize_t length1 = readlink(_NSStringToPath(path1), link1, PATH_MAX);
+  if (length1 >= 0) {
+    link1[length1] = 0;
   } else {
-    NSLog(@"Failed reading symlink \"%@\" (%s)", path, strerror(errno));
+    NSLog(@"Failed reading symlink \"%@\" (%s)", path1, strerror(errno));
   }
   
-  char otherLink[PATH_MAX + 1];
-  ssize_t otherLength = readlink(_NSStringToPath(otherPath), otherLink, PATH_MAX);
-  if (otherLength >= 0) {
-    otherLink[otherLength] = 0;
+  char link2[PATH_MAX + 1];
+  ssize_t length2 = readlink(_NSStringToPath(path2), link2, PATH_MAX);
+  if (length2 >= 0) {
+    link2[length2] = 0;
   } else {
-    NSLog(@"Failed reading symlink \"%@\" (%s)", otherPath, strerror(errno));
+    NSLog(@"Failed reading symlink \"%@\" (%s)", path2, strerror(errno));
   }
   
-  if ((length < 0) || (otherLength < 0) || strcmp(link, otherLink)) {
+  if ((length1 < 0) || (length2 < 0) || strcmp(link1, link2)) {
     return NO;
   }
   return YES;
 }
 
-static BOOL _CompareFiles(NSString* path, NSString* otherPath) {
-  unsigned char md5[16];
-  NSData* data = [NSData dataWithContentsOfFile:path options:(NSDataReadingMappedIfSafe | NSDataReadingUncached) error:NULL];
-  if (data) {
-    CC_MD5(data.bytes, data.length, md5);
+static BOOL _CompareFiles(NSString* path1, NSString* path2) {
+  BOOL success = NO;
+  int fd1 = open(_NSStringToPath(path1), O_RDONLY | O_NOFOLLOW);
+  if (fd1 > 0) {
+    int fd2 = open(_NSStringToPath(path2), O_RDONLY | O_NOFOLLOW);
+    if (fd2 > 0) {
+      
+      if (fcntl(fd1, F_NOCACHE, 1) < 0) {
+        NSLog(@"Failed enabling uncached read for \"%@\" (%s)", path1, strerror(errno));
+      }
+      if (fcntl(fd1, F_RDAHEAD, 1) < 0) {
+        NSLog(@"Failed enabling read-head for \"%@\" (%s)", path1, strerror(errno));
+      }
+      void* buffer1 = malloc(kFileCompareIOBufferSize);
+      
+      if (fcntl(fd2, F_NOCACHE, 1) < 0) {
+        NSLog(@"Failed enabling uncached read for \"%@\" (%s)", path2, strerror(errno));
+      }
+      if (fcntl(fd2, F_RDAHEAD, 1) < 0) {
+        NSLog(@"Failed enabling read-head for \"%@\" (%s)", path2, strerror(errno));
+      }
+      void* buffer2 = malloc(kFileCompareIOBufferSize);
+      
+      while (1) {
+        ssize_t size1 = read(fd1, buffer1, kFileCompareIOBufferSize);
+        ssize_t size2 = read(fd2, buffer2, kFileCompareIOBufferSize);
+        if ((size1 < 0) || (size2 < 0) || (size1 != size2)) {
+          break;
+        }
+        if (memcmp(buffer1, buffer2, size1)) {
+          break;
+        }
+        if (size1 < kFileCompareIOBufferSize) {
+          success = YES;
+          break;
+        }
+      }
+      
+      free(buffer1);
+      free(buffer2);
+      close(fd2);
+    } else {
+      NSLog(@"Failed opening \"%@\" (%s)", path2, strerror(errno));
+    }
+    close(fd1);
   } else {
-    NSLog(@"Failed reading file \"%@\"", path);
+    NSLog(@"Failed opening \"%@\" (%s)", path1, strerror(errno));
   }
-  
-  unsigned char otherMd5[16];
-  NSData* otherData = [NSData dataWithContentsOfFile:otherPath options:(NSDataReadingMappedIfSafe | NSDataReadingUncached) error:NULL];
-  if (otherData) {
-    CC_MD5(otherData.bytes, otherData.length, otherMd5);
-  } else {
-    NSLog(@"Failed reading file \"%@\"", otherPath);
-  }
-  
-  if (!data || !otherData || memcmp(md5, otherMd5, 16)) {
-    return NO;
-  }
-  return YES;
+  return success;
 }
 
 - (ComparisonResult)compareFile:(FileItem*)otherFile options:(ComparisonOptions)options {
