@@ -64,6 +64,14 @@ typedef struct {
 static struct attrlist _attributeList = {0};
 #endif
 
+static inline const char* _NSStringToPath(NSString* s) {
+  return [[NSFileManager defaultManager] fileSystemRepresentationWithPath:s];
+}
+
+static inline NSString* _NSStringFromPath(const char* s) {
+  return [[NSFileManager defaultManager] stringWithFileSystemRepresentation:s length:strlen(s)];
+}
+
 static inline NSComparisonResult _CompareStrings(NSString* s1, NSString* s2) {
   return [s1 compare:s2 options:(NSCaseInsensitiveSearch | NSNumericSearch | NSWidthInsensitiveSearch)];  // Same as -localizedStandardCompare: minus NSForcedOrderingSearch
 }
@@ -115,7 +123,7 @@ static inline NSDate* NSDateFromTimeSpec(const struct timespec* t) {
   if (![path isAbsolutePath]) {
     path = [[[NSFileManager defaultManager] currentDirectoryPath] stringByAppendingPathComponent:path];
   }
-  const char* cPath = [[path stringByStandardizingPath] UTF8String];
+  const char* cPath = _NSStringToPath([path stringByStandardizingPath]);
   Attributes attributes;
   if (!_GetAttributes(cPath, &attributes)) {
     NSLog(@"Failed retrieving info for \"%s\" (%s)", cPath, strerror(errno));
@@ -127,9 +135,9 @@ static inline NSDate* NSDateFromTimeSpec(const struct timespec* t) {
 - (id)initWithParent:(DirectoryItem*)parent path:(const char*)path base:(size_t)base name:(const char*)name attributes:(const Attributes*)attributes {
   if ((self = [super init])) {
     _parent = parent;
-    _absolutePath = [[NSString alloc] initWithUTF8String:path];
-    _relativePath = [[NSString alloc] initWithUTF8String:(parent ? &path[base + 1] : &path[base])];
-    _name = [[NSString alloc] initWithUTF8String:name];
+    _absolutePath = _NSStringFromPath(path);
+    _relativePath = _NSStringFromPath(parent ? &path[base + 1] : &path[base]);
+    _name = _NSStringFromPath(name);
     _mode = attributes->mode;
     _uid = attributes->uid;
     _gid = attributes->gid;
@@ -197,7 +205,7 @@ static inline NSDate* NSDateFromTimeSpec(const struct timespec* t) {
 
 static BOOL _CompareSymLinks(NSString* path, NSString* otherPath) {
   char link[PATH_MAX + 1];
-  ssize_t length = readlink([path UTF8String], link, PATH_MAX);
+  ssize_t length = readlink(_NSStringToPath(path), link, PATH_MAX);
   if (length >= 0) {
     link[length] = 0;
   } else {
@@ -205,7 +213,7 @@ static BOOL _CompareSymLinks(NSString* path, NSString* otherPath) {
   }
   
   char otherLink[PATH_MAX + 1];
-  ssize_t otherLength = readlink([otherPath UTF8String], otherLink, PATH_MAX);
+  ssize_t otherLength = readlink(_NSStringToPath(otherPath), otherLink, PATH_MAX);
   if (otherLength >= 0) {
     otherLink[otherLength] = 0;
   } else {
