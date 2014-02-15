@@ -59,7 +59,6 @@ typedef enum {
 @property(nonatomic, readonly) short posixPermissions;
 @property(nonatomic, readonly) NSDate* creationDate;
 @property(nonatomic, readonly) NSDate* modificationDate;
-- (id)initWithPath:(NSString*)path;
 - (BOOL)isDirectory;
 - (BOOL)isFile;
 - (BOOL)isSymLink;
@@ -76,5 +75,18 @@ typedef enum {
 - (void)enumerateChildrenRecursivelyUsingEnterDirectoryBlock:(void (^)(DirectoryItem* directory))enterBlock
                                                    fileBlock:(void (^)(DirectoryItem* directory, FileItem* file))fileBlock
                                           exitDirectoryBlock:(void (^)(DirectoryItem* directory))exitBlock;
-- (void)compareDirectory:(DirectoryItem*)otherDirectory options:(ComparisonOptions)options withBlock:(void (^)(ComparisonResult result, Item* item, Item* otherItem))block;
+@end
+
+@interface DirectoryScanner : NSObject
++ (DirectoryScanner*)sharedScanner;
+- (DirectoryItem*)scanDirectoryAtPath:(NSString*)path withExcludeBlock:(BOOL (^)(DirectoryItem* directory))block;  // Exclude block can be NULL
+- (BOOL)compareOldDirectory:(DirectoryItem*)oldDirectory
+           withNewDirectory:(DirectoryItem*)newDirectory
+                    options:(ComparisonOptions)options
+                resultBlock:(void (^)(ComparisonResult result, Item* item, Item* otherItem, BOOL* stop))block;  // Return NO if stopped
+- (BOOL)compareOldDirectoryAtPath:(NSString*)oldPath
+           withNewDirectoryAtPath:(NSString*)newPath
+                          options:(ComparisonOptions)options
+                     excludeBlock:(BOOL (^)(DirectoryItem* directory))block
+                      resultBlock:(void (^)(ComparisonResult result, Item* item, Item* otherItem, BOOL* stop))resultBlock;  // Exclude block can be NULL - Return NO on failure or if stopped
 @end

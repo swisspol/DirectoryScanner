@@ -29,6 +29,13 @@
 
 #import "DirectoryScanner.h"
 
+static BOOL _stop = NO;
+
+static void _SignalHandler(int signal) {
+  _stop = YES;
+  printf("\n");
+}
+
 static inline void _PrintItem(Item* item, char c1, char c2, char c3, char c4, char c5, char c6, BOOL recursive, BOOL skipInvisible) {
   if (skipInvisible && [item.name hasPrefix:@"."]) {
     return;
@@ -49,9 +56,11 @@ static inline void _PrintItem(Item* item, char c1, char c2, char c3, char c4, ch
 }
 
 int main(int argc, const char* argv[]) {
+  signal(SIGINT, _SignalHandler);
   @autoreleasepool {
     BOOL skipEqual = NO;
     BOOL skipInvisible = NO;
+    BOOL showProgress = NO;
     ComparisonOptions options = 0;
     NSString* srcPath = nil;
     NSString* dstPath = nil;
@@ -61,6 +70,7 @@ int main(int argc, const char* argv[]) {
         const char* option = &arg[1];
         while (*option) {
           switch (*option) {
+            case 'p': showProgress = YES; break;
             case 'e': skipEqual = YES; break;
             case 'i': skipInvisible = YES; break;
             case 'c': options |= kComparisonOption_FileContent; break;
@@ -74,35 +84,39 @@ int main(int argc, const char* argv[]) {
       }
     }
     if (srcPath && dstPath) {
-      DirectoryItem* srcRoot = [[DirectoryItem alloc] initWithPath:srcPath];
-      DirectoryItem* dstRoot = [[DirectoryItem alloc] initWithPath:dstPath];
-      if (srcRoot && dstRoot) {
-        [srcRoot compareDirectory:dstRoot options:options withBlock:^(ComparisonResult result, Item* item, Item* otherItem) {
-          if (result & kComparisonResult_ModifiedMask) {
-            _PrintItem(item,
-                       result & kComparisonResult_Modified_Permissions ? 'p' : '~',
-                       result & kComparisonResult_Modified_GroupID ? 'g' : '~',
-                       result & kComparisonResult_Modified_UserID ? 'u' : '~',
-                       result & (kComparisonResult_Modified_CreationDate | kComparisonResult_Modified_ModificationDate) ? 'd' : '~',
-                       result & (kComparisonResult_Modified_FileDataSize | kComparisonResult_Modified_FileResourceSize) ? 's' : '~',
-                       result & (kComparisonResult_Modified_FileDataContent | kComparisonResult_Modified_FileResourceContent) ? 'c' : '~',
-                       NO,
-                       skipInvisible);
-          } else if (result & kComparisonResult_Removed) {
-            _PrintItem(item, '-', '-', '-', '-', '-', '-', YES, skipInvisible);
-          } else if (result & kComparisonResult_Added) {
-            _PrintItem(otherItem, '+', '+', '+', '+', '+', '+', YES, skipInvisible);
-          } else if (result & kComparisonResult_Replaced) {
-            _PrintItem(item, '-', '-', '-', '-', '-', '-', YES, skipInvisible);
-            _PrintItem(otherItem, '+', '+', '+', '+', '+', '+', YES, skipInvisible);
-          } else if (!skipEqual) {
-            _PrintItem(item, '=', '=', '=', '=', '=', '=', YES, skipInvisible);
-          }
-        }];
+      BOOL success = [[DirectoryScanner sharedScanner] compareOldDirectoryAtPath:srcPath withNewDirectoryAtPath:dstPath options:options excludeBlock:^BOOL(DirectoryItem* directory) {
+        if (showProgress) {
+          fprintf(stdout, "%s\n", [directory.relativePath UTF8String]);
+        }
+        return _stop;
+      } resultBlock:^(ComparisonResult result, Item* item, Item* otherItem, BOOL* stop) {
+        if (result & kComparisonResult_ModifiedMask) {
+          _PrintItem(item,
+                     result & kComparisonResult_Modified_Permissions ? 'p' : '~',
+                     result & kComparisonResult_Modified_GroupID ? 'g' : '~',
+                     result & kComparisonResult_Modified_UserID ? 'u' : '~',
+                     result & (kComparisonResult_Modified_CreationDate | kComparisonResult_Modified_ModificationDate) ? 'd' : '~',
+                     result & (kComparisonResult_Modified_FileDataSize | kComparisonResult_Modified_FileResourceSize) ? 's' : '~',
+                     result & (kComparisonResult_Modified_FileDataContent | kComparisonResult_Modified_FileResourceContent) ? 'c' : '~',
+                     NO,
+                     skipInvisible);
+        } else if (result & kComparisonResult_Removed) {
+          _PrintItem(item, '-', '-', '-', '-', '-', '-', YES, skipInvisible);
+        } else if (result & kComparisonResult_Added) {
+          _PrintItem(otherItem, '+', '+', '+', '+', '+', '+', YES, skipInvisible);
+        } else if (result & kComparisonResult_Replaced) {
+          _PrintItem(item, '-', '-', '-', '-', '-', '-', YES, skipInvisible);
+          _PrintItem(otherItem, '+', '+', '+', '+', '+', '+', YES, skipInvisible);
+        } else if (!skipEqual) {
+          _PrintItem(item, '=', '=', '=', '=', '=', '=', YES, skipInvisible);
+        }
+        *stop = _stop;
+      }];
+      if (success) {
         return 0;
       }
     } else {
-      fprintf(stdout, "Usage: %s [-e] [-i] [-c] sourceDirectory destinationDirectory\n", basename((char*)argv[0]));
+      fprintf(stdout, "Usage: %s [-p] [-e] [-i] [-c] sourceDirectory destinationDirectory\n", basename((char*)argv[0]));
     }
   }
   return 1;
