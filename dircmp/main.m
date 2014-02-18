@@ -111,6 +111,8 @@ int main(int argc, const char* argv[]) {
           _PrintItem(item, '=', '=', '=', '=', '=', '=', YES, skipInvisible);
         }
         *stop = _stop;
+      } errorBlock:^(NSError* error) {
+        fprintf(stderr, "[%s] %s (%s)\n", [[error.userInfo objectForKey:NSFilePathErrorKey] UTF8String], [error.localizedDescription UTF8String], [error.localizedFailureReason UTF8String]);
       }];
       if (success) {
         return 0;

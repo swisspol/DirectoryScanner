@@ -79,14 +79,18 @@ typedef enum {
 
 @interface DirectoryScanner : NSObject
 + (DirectoryScanner*)sharedScanner;
-- (DirectoryItem*)scanDirectoryAtPath:(NSString*)path withExcludeBlock:(BOOL (^)(DirectoryItem* directory))block;  // Exclude block can be NULL
+- (DirectoryItem*)scanDirectoryAtPath:(NSString*)path
+                     withExcludeBlock:(BOOL (^)(DirectoryItem* directory))excludeBlock  // Can be NULL
+                           errorBlock:(void (^)(NSError* error))errorBlock;  // Can be NULL
 - (BOOL)compareOldDirectory:(DirectoryItem*)oldDirectory
            withNewDirectory:(DirectoryItem*)newDirectory
                     options:(ComparisonOptions)options
-                resultBlock:(void (^)(ComparisonResult result, Item* item, Item* otherItem, BOOL* stop))block;  // Return NO if stopped
+                resultBlock:(void (^)(ComparisonResult result, Item* item, Item* otherItem, BOOL* stop))block
+                 errorBlock:(void (^)(NSError* error))errorBlock;  // Can be NULL - Return NO if stopped
 - (BOOL)compareOldDirectoryAtPath:(NSString*)oldPath
            withNewDirectoryAtPath:(NSString*)newPath
                           options:(ComparisonOptions)options
-                     excludeBlock:(BOOL (^)(DirectoryItem* directory))block
-                      resultBlock:(void (^)(ComparisonResult result, Item* item, Item* otherItem, BOOL* stop))resultBlock;  // Exclude block can be NULL - Return NO on failure or if stopped
+                     excludeBlock:(BOOL (^)(DirectoryItem* directory))excludeBlock  // Can be NULL
+                      resultBlock:(void (^)(ComparisonResult result, Item* item, Item* otherItem, BOOL* stop))resultBlock
+                       errorBlock:(void (^)(NSError* error))errorBlock;  // Can be NULL - Return NO on failure or if stopped
 @end

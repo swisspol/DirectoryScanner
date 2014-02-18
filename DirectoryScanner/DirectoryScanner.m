@@ -38,6 +38,18 @@
 #define kFileCompareIOBufferSize (256 * 1024)  // Optimal size seems to be 64 KB for SSDs but 256 KB for HDDs
 #define kResourceForkPath @"..namedfork/rsrc"
 
+#define CALL_ERROR_BLOCK(__MESSAGE__, __PATH__) \
+  do { \
+    if (errorBlock) { \
+      NSError* error = [NSError errorWithDomain:NSPOSIXErrorDomain code:errno userInfo:@{ \
+        NSFilePathErrorKey: __PATH__, \
+        NSLocalizedDescriptionKey: __MESSAGE__, \
+        NSLocalizedFailureReasonErrorKey: [NSString stringWithUTF8String:strerror(errno)] \
+      }]; \
+      errorBlock(error); \
+    } \
+  } while (0)
+
 #pragma pack(push, 1)
 
 typedef struct {
@@ -147,7 +159,7 @@ static inline NSDate* NSDateFromTimeSpec(const struct timespec* t) {
   return (_mode & S_IFMT) == S_IFLNK;
 }
 
-- (ComparisonResult)compareItem:(Item*)otherItem options:(ComparisonOptions)options {
+- (ComparisonResult)compareItem:(Item*)otherItem withOptions:(ComparisonOptions)options {
   ComparisonResult result = 0;
   if ((_mode & ALLPERMS) != (otherItem->_mode & ALLPERMS)) {
     result |= kComparisonResult_Modified_Permissions;
@@ -179,13 +191,13 @@ static inline NSDate* NSDateFromTimeSpec(const struct timespec* t) {
   return self;
 }
 
-static BOOL _CompareSymLinks(NSString* path1, NSString* path2) {
+static BOOL _CompareSymLinks(NSString* path1, NSString* path2, void(^errorBlock)(NSError*)) {
   char link1[PATH_MAX + 1];
   ssize_t length1 = readlink(_NSStringToPath(path1), link1, PATH_MAX);
   if (length1 >= 0) {
     link1[length1] = 0;
   } else {
-    NSLog(@"Failed reading symlink \"%@\" (%s)", path1, strerror(errno));
+    CALL_ERROR_BLOCK(@"Failed reading symlink", path1);
   }
   
   char link2[PATH_MAX + 1];
@@ -193,7 +205,7 @@ static BOOL _CompareSymLinks(NSString* path1, NSString* path2) {
   if (length2 >= 0) {
     link2[length2] = 0;
   } else {
-    NSLog(@"Failed reading symlink \"%@\" (%s)", path2, strerror(errno));
+    CALL_ERROR_BLOCK(@"Failed reading symlink", path2);
   }
   
   if ((length1 < 0) || (length2 < 0) || strcmp(link1, link2)) {
@@ -202,7 +214,7 @@ static BOOL _CompareSymLinks(NSString* path1, NSString* path2) {
   return YES;
 }
 
-static BOOL _CompareFiles(NSString* path1, NSString* path2) {
+static BOOL _CompareFiles(NSString* path1, NSString* path2, void(^errorBlock)(NSError*)) {
   BOOL success = NO;
   int fd1 = open(_NSStringToPath(path1), O_RDONLY | O_NOFOLLOW);
   if (fd1 > 0) {
@@ -210,18 +222,18 @@ static BOOL _CompareFiles(NSString* path1, NSString* path2) {
     if (fd2 > 0) {
       
       if (fcntl(fd1, F_NOCACHE, 1) < 0) {
-        NSLog(@"Failed enabling uncached read for \"%@\" (%s)", path1, strerror(errno));
+        CALL_ERROR_BLOCK(@"Failed enabling uncached read for file", path1);
       }
       if (fcntl(fd1, F_RDAHEAD, 1) < 0) {
-        NSLog(@"Failed enabling read-head for \"%@\" (%s)", path1, strerror(errno));
+        CALL_ERROR_BLOCK(@"Failed enabling read-ahead for file", path1);
       }
       void* buffer1 = malloc(kFileCompareIOBufferSize);
       
       if (fcntl(fd2, F_NOCACHE, 1) < 0) {
-        NSLog(@"Failed enabling uncached read for \"%@\" (%s)", path2, strerror(errno));
+        CALL_ERROR_BLOCK(@"Failed enabling uncached read for file", path2);
       }
       if (fcntl(fd2, F_RDAHEAD, 1) < 0) {
-        NSLog(@"Failed enabling read-head for \"%@\" (%s)", path2, strerror(errno));
+        CALL_ERROR_BLOCK(@"Failed enabling read-ahead for file", path2);
       }
       void* buffer2 = malloc(kFileCompareIOBufferSize);
       
@@ -244,17 +256,19 @@ static BOOL _CompareFiles(NSString* path1, NSString* path2) {
       free(buffer2);
       close(fd2);
     } else {
-      NSLog(@"Failed opening \"%@\" (%s)", path2, strerror(errno));
+      CALL_ERROR_BLOCK(@"Failed opening file for reading", path2);
     }
     close(fd1);
   } else {
-    NSLog(@"Failed opening \"%@\" (%s)", path1, strerror(errno));
+    CALL_ERROR_BLOCK(@"Failed opening file for reading", path1);
   }
   return success;
 }
 
-- (ComparisonResult)compareFile:(FileItem*)otherFile options:(ComparisonOptions)options {
-  ComparisonResult result = [self compareItem:otherFile options:options];
+- (ComparisonResult)compareFile:(FileItem*)otherFile
+                    withOptions:(ComparisonOptions)options
+                     errorBlock:(void (^)(NSError* error))errorBlock {
+  ComparisonResult result = [self compareItem:otherFile withOptions:options];
   if (_dataSize != otherFile->_dataSize) {
     result |= kComparisonResult_Modified_FileDataSize;
   }
@@ -263,14 +277,14 @@ static BOOL _CompareFiles(NSString* path1, NSString* path2) {
   }
   if (options & kComparisonOption_FileContent) {
     if ([self isSymLink] && [otherFile isSymLink]) {
-      if ((_dataSize != otherFile->_dataSize) || !_CompareSymLinks(self.absolutePath, otherFile.absolutePath)) {
+      if ((_dataSize != otherFile->_dataSize) || !_CompareSymLinks(self.absolutePath, otherFile.absolutePath, errorBlock)) {
         result |= kComparisonResult_Modified_FileDataContent;
       }
     } else if ([self isFile] && [otherFile isFile]) {
-      if ((_dataSize != otherFile->_dataSize) || ((_dataSize > 0) && !_CompareFiles(self.absolutePath, otherFile.absolutePath))) {
+      if ((_dataSize != otherFile->_dataSize) || ((_dataSize > 0) && !_CompareFiles(self.absolutePath, otherFile.absolutePath, errorBlock))) {
         result |= kComparisonResult_Modified_FileDataContent;
       }
-      if ((_resourceSize != otherFile->_resourceSize) || ((_resourceSize > 0) && !_CompareFiles([self.absolutePath stringByAppendingPathComponent:kResourceForkPath], [otherFile.absolutePath stringByAppendingPathComponent:kResourceForkPath]))) {
+      if ((_resourceSize != otherFile->_resourceSize) || ((_resourceSize > 0) && !_CompareFiles([self.absolutePath stringByAppendingPathComponent:kResourceForkPath], [otherFile.absolutePath stringByAppendingPathComponent:kResourceForkPath], errorBlock))) {
         result |= kComparisonResult_Modified_FileResourceContent;
       }
     } else {
@@ -284,9 +298,11 @@ static BOOL _CompareFiles(NSString* path1, NSString* path2) {
 
 @implementation DirectoryItem
 
-- (id)initWithParent:(DirectoryItem*)parent path:(const char*)path base:(size_t)base name:(const char*)name attributes:(const Attributes*)attributes excludeBlock:(BOOL (^)(DirectoryItem* directory))block {
+- (id)initWithParent:(DirectoryItem*)parent path:(const char*)path base:(size_t)base name:(const char*)name attributes:(const Attributes*)attributes
+        excludeBlock:(BOOL (^)(DirectoryItem* directory))excludeBlock
+          errorBlock:(void (^)(NSError* error))errorBlock {
   if ((self = [super initWithParent:parent path:path base:base name:name attributes:attributes])) {
-    if (block && block(self)) {
+    if (excludeBlock && excludeBlock(self)) {
       return nil;
     }
     _children = [[NSMutableArray alloc] init];
@@ -313,7 +329,7 @@ static BOOL _CompareFiles(NSString* path1, NSString* path2) {
           switch (attributes.mode & S_IFMT) {
             
             case S_IFDIR:
-              item = [[DirectoryItem alloc] initWithParent:self path:buffer base:base name:entry->d_name attributes:&attributes excludeBlock:block];
+              item = [[DirectoryItem alloc] initWithParent:self path:buffer base:base name:entry->d_name attributes:&attributes excludeBlock:excludeBlock errorBlock:errorBlock];
               break;
             
             case S_IFREG:
@@ -326,7 +342,7 @@ static BOOL _CompareFiles(NSString* path1, NSString* path2) {
             [(NSMutableArray*)_children addObject:item];
           }
         } else {
-          NSLog(@"Failed retrieving info for \"%s\" (%s)", buffer, strerror(errno));
+          CALL_ERROR_BLOCK(@"Failed retrieving file system info", _NSStringFromPath(buffer));
         }
         free(buffer);
       }
@@ -336,7 +352,7 @@ static BOOL _CompareFiles(NSString* path1, NSString* path2) {
         return _CompareStrings(item1.name, item2.name);
       }];
     } else {
-      NSLog(@"Failed opening directory \"%s\" (%s)", path, strerror(errno));
+      CALL_ERROR_BLOCK(@"Failed opening directory", _NSStringFromPath(path));
       return nil;
     }
   }
@@ -370,10 +386,13 @@ static BOOL _CompareFiles(NSString* path1, NSString* path2) {
   }
 }
 
-- (BOOL)compareDirectory:(DirectoryItem*)otherDirectory options:(ComparisonOptions)options withResultBlock:(void (^)(ComparisonResult result, Item* item, Item* otherItem, BOOL* stop))block {
+- (BOOL)compareDirectory:(DirectoryItem*)otherDirectory
+             withOptions:(ComparisonOptions)options
+             resultBlock:(void (^)(ComparisonResult result, Item* item, Item* otherItem, BOOL* stop))block
+              errorBlock:(void (^)(NSError* error))errorBlock {
   BOOL stop = NO;
   if (self.parent) {
-    block([self compareItem:otherDirectory options:options], self, otherDirectory, &stop);
+    block([self compareItem:otherDirectory withOptions:options], self, otherDirectory, &stop);
   }
   
   NSArray* otherChildren = otherDirectory.children;
@@ -390,12 +409,12 @@ static BOOL _CompareFiles(NSString* path1, NSString* path2) {
       NSComparisonResult result = _CompareStrings(name, otherName);
       if (result == NSOrderedSame) {
         if ([item isFile] && [otherItem isFile]) {
-          block([(FileItem*)item compareFile:(FileItem*)otherItem options:options], item, otherItem, &stop);
+          block([(FileItem*)item compareFile:(FileItem*)otherItem withOptions:options errorBlock:errorBlock], item, otherItem, &stop);
         } else if ([item isSymLink] && [otherItem isSymLink]) {
-          block([(FileItem*)item compareFile:(FileItem*)otherItem options:options], item, otherItem, &stop);
+          block([(FileItem*)item compareFile:(FileItem*)otherItem withOptions:options errorBlock:errorBlock], item, otherItem, &stop);
         } else if ([item isDirectory] && [otherItem isDirectory]) {
           @autoreleasepool {
-            stop = ![(DirectoryItem*)item compareDirectory:(DirectoryItem*)otherItem options:options withResultBlock:block];
+            stop = ![(DirectoryItem*)item compareDirectory:(DirectoryItem*)otherItem withOptions:options resultBlock:block errorBlock:errorBlock];
           }
         } else {
           block(kComparisonResult_Replaced, item, otherItem, &stop);
@@ -436,40 +455,47 @@ static BOOL _CompareFiles(NSString* path1, NSString* path2) {
   return scanner;
 }
 
-static const char* _GetCPathAndAttributes(NSString* path, Attributes* attributes) {
+static const char* _GetCPathAndAttributes(NSString* path, Attributes* attributes, void(^errorBlock)(NSError*)) {
   if (![path isAbsolutePath]) {
     path = [[[NSFileManager defaultManager] currentDirectoryPath] stringByAppendingPathComponent:path];
   }
   const char* cPath = _NSStringToPath([path stringByStandardizingPath]);
   if (!_GetAttributes(cPath, attributes)) {
-    NSLog(@"Failed retrieving info for \"%s\" (%s)", cPath, strerror(errno));
+    CALL_ERROR_BLOCK(@"Failed retrieving file system info", _NSStringFromPath(cPath));
     return NULL;
   }
   return cPath;
 }
 
-- (DirectoryItem*)scanDirectoryAtPath:(NSString*)path withExcludeBlock:(BOOL (^)(DirectoryItem* directory))block {
+- (DirectoryItem*)scanDirectoryAtPath:(NSString*)path
+                     withExcludeBlock:(BOOL (^)(DirectoryItem* directory))excludeBlock
+                           errorBlock:(void (^)(NSError* error))errorBlock {
   Attributes attributes;
-  const char* cPath = _GetCPathAndAttributes(path, &attributes);
-  return [[DirectoryItem alloc] initWithParent:nil path:cPath base:strlen(cPath) name:basename((char*)cPath) attributes:&attributes excludeBlock:block];
+  const char* cPath = _GetCPathAndAttributes(path, &attributes, errorBlock);
+  if (!cPath) {
+    return nil;
+  }
+  return [[DirectoryItem alloc] initWithParent:nil path:cPath base:strlen(cPath) name:basename((char*)cPath) attributes:&attributes excludeBlock:excludeBlock errorBlock:errorBlock];
 }
 
 - (BOOL)compareOldDirectory:(DirectoryItem*)oldDirectory
            withNewDirectory:(DirectoryItem*)newDirectory
                     options:(ComparisonOptions)options
-                resultBlock:(void (^)(ComparisonResult result, Item* item, Item* otherItem, BOOL* stop))block {
-  return [oldDirectory compareDirectory:newDirectory options:options withResultBlock:block];
+                resultBlock:(void (^)(ComparisonResult result, Item* item, Item* otherItem, BOOL* stop))block
+                 errorBlock:(void (^)(NSError* error))errorBlock {
+  return [oldDirectory compareDirectory:newDirectory withOptions:options resultBlock:block errorBlock:errorBlock];
 }
 
 - (BOOL)compareOldDirectoryAtPath:(NSString*)oldPath
            withNewDirectoryAtPath:(NSString*)newPath
                           options:(ComparisonOptions)options
                      excludeBlock:(BOOL (^)(DirectoryItem* directory))excludeBlock
-                      resultBlock:(void (^)(ComparisonResult result, Item* item, Item* otherItem, BOOL* stop))resultBlock {
+                      resultBlock:(void (^)(ComparisonResult result, Item* item, Item* otherItem, BOOL* stop))resultBlock
+                       errorBlock:(void (^)(NSError* error))errorBlock {
   Attributes oldAttributes;
-  const char* oldCPath = _GetCPathAndAttributes(oldPath, &oldAttributes);
+  const char* oldCPath = _GetCPathAndAttributes(oldPath, &oldAttributes, errorBlock);
   Attributes newAttributes;
-  const char* newCPath = _GetCPathAndAttributes(newPath, &newAttributes);
+  const char* newCPath = _GetCPathAndAttributes(newPath, &newAttributes, errorBlock);
   if (!oldCPath || !newCPath) {
     return NO;
   }
@@ -488,13 +514,13 @@ static const char* _GetCPathAndAttributes(NSString* path, Attributes* attributes
     dispatch_semaphore_t newSemaphore = dispatch_semaphore_create(0);
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
       @autoreleasepool {
-        oldDirectory = [[DirectoryItem alloc] initWithParent:nil path:oldCPath base:strlen(oldCPath) name:basename((char*)oldCPath) attributes:&oldAttributes excludeBlock:excludeBlock];
+        oldDirectory = [[DirectoryItem alloc] initWithParent:nil path:oldCPath base:strlen(oldCPath) name:basename((char*)oldCPath) attributes:&oldAttributes excludeBlock:excludeBlock errorBlock:errorBlock];
       }
       dispatch_semaphore_signal(oldSemaphore);
     });
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
       @autoreleasepool {
-        newDirectory = [[DirectoryItem alloc] initWithParent:nil path:newCPath base:strlen(newCPath) name:basename((char*)newCPath) attributes:&newAttributes excludeBlock:excludeBlock];
+        newDirectory = [[DirectoryItem alloc] initWithParent:nil path:newCPath base:strlen(newCPath) name:basename((char*)newCPath) attributes:&newAttributes excludeBlock:excludeBlock errorBlock:errorBlock];
       }
       dispatch_semaphore_signal(newSemaphore);
     });
@@ -503,14 +529,14 @@ static const char* _GetCPathAndAttributes(NSString* path, Attributes* attributes
     dispatch_semaphore_wait(oldSemaphore, DISPATCH_TIME_FOREVER);
     dispatch_release(oldSemaphore);
   } else {
-    oldDirectory = [[DirectoryItem alloc] initWithParent:nil path:oldCPath base:strlen(oldCPath) name:basename((char*)oldCPath) attributes:&oldAttributes excludeBlock:excludeBlock];
-    newDirectory = [[DirectoryItem alloc] initWithParent:nil path:newCPath base:strlen(newCPath) name:basename((char*)newCPath) attributes:&newAttributes excludeBlock:excludeBlock];
+    oldDirectory = [[DirectoryItem alloc] initWithParent:nil path:oldCPath base:strlen(oldCPath) name:basename((char*)oldCPath) attributes:&oldAttributes excludeBlock:excludeBlock errorBlock:errorBlock];
+    newDirectory = [[DirectoryItem alloc] initWithParent:nil path:newCPath base:strlen(newCPath) name:basename((char*)newCPath) attributes:&newAttributes excludeBlock:excludeBlock errorBlock:errorBlock];
   }
   if (!oldDirectory || !newDirectory) {
     return NO;
   }
   
-  return [self compareOldDirectory:oldDirectory withNewDirectory:newDirectory options:options resultBlock:resultBlock];
+  return [self compareOldDirectory:oldDirectory withNewDirectory:newDirectory options:options resultBlock:resultBlock errorBlock:errorBlock];
 }
 
 @end
