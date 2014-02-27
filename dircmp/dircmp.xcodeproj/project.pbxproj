@@ -147,6 +147,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = macosx;
 				WARNING_CFLAGS = (
+					"-Wall",
 					"-Weverything",
 					"-Wno-objc-missing-property-synthesis",
 					"-Wno-direct-ivar-access",
