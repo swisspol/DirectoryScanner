@@ -433,6 +433,13 @@ static BOOL _CompareFiles(NSString* path1, NSString* path2, void(^errorBlock)(NS
       }
     }
   }
+  for (NSUInteger i = start; i < end; ++i) {
+    Item* otherItem = (Item*)[otherChildren objectAtIndex:i];
+    block(kComparisonResult_Added, nil, otherItem, &stop);
+    if (stop) {
+      return NO;
+    }
+  }
   
   return YES;
 }
