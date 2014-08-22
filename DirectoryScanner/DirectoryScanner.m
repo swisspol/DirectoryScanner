@@ -41,12 +41,14 @@
 #define CALL_ERROR_BLOCK(__MESSAGE__, __PATH__) \
   do { \
     if (errorBlock) { \
-      NSError* error = [NSError errorWithDomain:NSPOSIXErrorDomain code:errno userInfo:@{ \
-        NSFilePathErrorKey: __PATH__, \
-        NSLocalizedDescriptionKey: __MESSAGE__, \
+      NSString* _message = __MESSAGE__; \
+      NSString* _path = __PATH__; \
+      NSError* _error = [NSError errorWithDomain:NSPOSIXErrorDomain code:errno userInfo:@{ \
+        NSFilePathErrorKey: _path ? _path : @"", \
+        NSLocalizedDescriptionKey: _message ? _message : @"", \
         NSLocalizedFailureReasonErrorKey: [NSString stringWithUTF8String:strerror(errno)] \
       }]; \
-      errorBlock(error); \
+      errorBlock(_error); \
     } \
   } while (0)
 
