@@ -88,7 +88,7 @@ static inline NSString* _NSStringFromPath(const char* s) {
 }
 
 static inline NSComparisonResult _CompareStrings(NSString* s1, NSString* s2) {
-  return [s1 compare:s2 options:(NSCaseInsensitiveSearch | NSNumericSearch | NSWidthInsensitiveSearch)];  // Same as -localizedStandardCompare: minus NSForcedOrderingSearch
+  return [s1 compare:s2 options:(NSCaseInsensitiveSearch | NSNumericSearch | NSWidthInsensitiveSearch | NSForcedOrderingSearch)];  // Same as -localizedStandardCompare:
 }
 
 static inline BOOL _GetAttributes(const char* path, Attributes* attributes) {
