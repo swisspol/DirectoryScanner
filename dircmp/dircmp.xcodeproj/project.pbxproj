@@ -103,7 +103,7 @@
 		E2A22B6518A4099F00E502E6 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 0500;
+				LastUpgradeCheck = 0720;
 				ORGANIZATIONNAME = TEMP;
 			};
 			buildConfigurationList = E2A22B6818A4099F00E502E6 /* Build configuration list for PBXProject "dircmp" */;
