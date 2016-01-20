@@ -400,35 +400,39 @@ static BOOL _CompareFiles(NSString* path1, NSString* path2, void(^errorBlock)(NS
     if (stop) {
       return NO;
     }
-    NSString* name = item.name;
-    for (NSUInteger i = start; i < end; ++i) {
-      Item* otherItem = (Item*)[otherChildren objectAtIndex:i];
-      NSString* otherName = otherItem.name;
-      NSComparisonResult result = [name compare:otherName options:(NSCaseInsensitiveSearch | NSWidthInsensitiveSearch | NSForcedOrderingSearch)];  // Same as -localizedStandardCompare: except for removing "NSNumericSearch"
-      if (result == NSOrderedSame) {
-        if ([item isFile] && [otherItem isFile]) {
-          block([(FileItem*)item compareFile:(FileItem*)otherItem withOptions:options errorBlock:errorBlock], item, otherItem, &stop);
-        } else if ([item isSymLink] && [otherItem isSymLink]) {
-          block([(FileItem*)item compareFile:(FileItem*)otherItem withOptions:options errorBlock:errorBlock], item, otherItem, &stop);
-        } else if ([item isDirectory] && [otherItem isDirectory]) {
-          @autoreleasepool {
-            stop = ![(DirectoryItem*)item compareDirectory:(DirectoryItem*)otherItem withOptions:options resultBlock:block errorBlock:errorBlock];
+    if (start < end) {
+      NSString* name = item.name;
+      for (NSUInteger i = start; i < end; ++i) {
+        Item* otherItem = (Item*)[otherChildren objectAtIndex:i];
+        NSString* otherName = otherItem.name;
+        NSComparisonResult result = [name compare:otherName options:(NSCaseInsensitiveSearch | NSWidthInsensitiveSearch | NSForcedOrderingSearch)];  // Same as -localizedStandardCompare: except for removing "NSNumericSearch"
+        if (result == NSOrderedSame) {
+          if ([item isFile] && [otherItem isFile]) {
+            block([(FileItem*)item compareFile:(FileItem*)otherItem withOptions:options errorBlock:errorBlock], item, otherItem, &stop);
+          } else if ([item isSymLink] && [otherItem isSymLink]) {
+            block([(FileItem*)item compareFile:(FileItem*)otherItem withOptions:options errorBlock:errorBlock], item, otherItem, &stop);
+          } else if ([item isDirectory] && [otherItem isDirectory]) {
+            @autoreleasepool {
+              stop = ![(DirectoryItem*)item compareDirectory:(DirectoryItem*)otherItem withOptions:options resultBlock:block errorBlock:errorBlock];
+            }
+          } else {
+            block(kComparisonResult_Replaced, item, otherItem, &stop);
           }
-        } else {
-          block(kComparisonResult_Replaced, item, otherItem, &stop);
-        }
-        start = i + 1;
-        break;
-      } else if (result == NSOrderedAscending) {
-        block(kComparisonResult_Removed, item, nil, &stop);
-        start = i;
-        break;
-      } else {  // NSOrderedDescending
-        block(kComparisonResult_Added, nil, otherItem, &stop);
-        if (stop) {
+          start = i + 1;
           break;
+        } else if (result == NSOrderedAscending) {
+          block(kComparisonResult_Removed, item, nil, &stop);
+          start = i;
+          break;
+        } else {  // NSOrderedDescending
+          block(kComparisonResult_Added, nil, otherItem, &stop);
+          if (stop) {
+            break;
+          }
         }
       }
+    } else {
+      block(kComparisonResult_Removed, item, nil, &stop);
     }
   }
   for (NSUInteger i = start; i < end; ++i) {
