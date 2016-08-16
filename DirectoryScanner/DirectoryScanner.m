@@ -87,6 +87,14 @@ static inline NSString* _NSStringFromPath(const char* s) {
   return [[NSFileManager defaultManager] stringWithFileSystemRepresentation:s length:strlen(s)];
 }
 
+static inline NSComparisonResult _CompareFilenames(NSString* s1, NSString* s2, BOOL forceOrdering) {
+  NSStringCompareOptions options = NSCaseInsensitiveSearch | NSNumericSearch | NSWidthInsensitiveSearch;
+  if (forceOrdering) {
+    options |= NSForcedOrderingSearch;
+  }
+  return [s1 compare:s2 options:options];
+}
+
 static inline BOOL _GetAttributes(const char* path, Attributes* attributes) {
 #if __USE_GETATTRLIST__
   if (getattrlist(path, &_attributeList, attributes, sizeof(Attributes), FSOPT_NOFOLLOW) == 0)
@@ -347,7 +355,7 @@ static BOOL _CompareFiles(NSString* path1, NSString* path2, void(^errorBlock)(NS
       closedir(directory);
       
       [(NSMutableArray*)_children sortUsingComparator:^NSComparisonResult(Item* item1, Item* item2) {
-        return [item1.name compare:item2.name options:(NSCaseInsensitiveSearch | NSNumericSearch | NSWidthInsensitiveSearch | NSForcedOrderingSearch)];  // Same as -localizedStandardCompare:
+        return _CompareFilenames(item1.name, item2.name, YES);
       }];
     } else {
       CALL_ERROR_BLOCK(@"Failed opening directory", _NSStringFromPath(path));
@@ -405,7 +413,7 @@ static BOOL _CompareFiles(NSString* path1, NSString* path2, void(^errorBlock)(NS
       for (NSUInteger i = start; i < end; ++i) {
         Item* otherItem = (Item*)[otherChildren objectAtIndex:i];
         NSString* otherName = otherItem.name;
-        NSComparisonResult result = [name compare:otherName options:(NSCaseInsensitiveSearch | NSWidthInsensitiveSearch | NSForcedOrderingSearch)];  // Same as -localizedStandardCompare: except for removing "NSNumericSearch"
+        NSComparisonResult result = _CompareFilenames(name, otherName, NO);
         if (result == NSOrderedSame) {
           if ([item isFile] && [otherItem isFile]) {
             block([(FileItem*)item compareFile:(FileItem*)otherItem withOptions:options errorBlock:errorBlock], item, otherItem, &stop);
