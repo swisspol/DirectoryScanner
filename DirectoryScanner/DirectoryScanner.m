@@ -399,19 +399,19 @@ static BOOL _CompareFiles(NSString* path1, NSString* path2, void(^errorBlock)(NS
   BOOL stop = NO;
   if (self.parent) {
     block([self compareItem:otherDirectory withOptions:options], self, otherDirectory, &stop);
+    if (stop) {
+      return NO;
+    }
   }
   
   NSArray* otherChildren = otherDirectory.children;
   NSUInteger start = 0;
   NSUInteger end = otherChildren.count;
   for (Item* item in _children) {
-    if (stop) {
-      return NO;
-    }
     if (start < end) {
       NSString* name = item.name;
-      for (NSUInteger i = start; i < end; ++i) {
-        Item* otherItem = (Item*)[otherChildren objectAtIndex:i];
+      while (start < end) {
+        Item* otherItem = (Item*)[otherChildren objectAtIndex:start];
         NSString* otherName = otherItem.name;
         NSComparisonResult result = _CompareFilenames(name, otherName, NO);
         if (result == NSOrderedSame) {
@@ -426,21 +426,30 @@ static BOOL _CompareFiles(NSString* path1, NSString* path2, void(^errorBlock)(NS
           } else {
             block(kComparisonResult_Replaced, item, otherItem, &stop);
           }
-          start = i + 1;
+          if (stop) {
+            return NO;
+          }
+          ++start;
           break;
         } else if (result == NSOrderedAscending) {
           block(kComparisonResult_Removed, item, nil, &stop);
-          start = i;
+          if (stop) {
+            return NO;
+          }
           break;
-        } else {  // NSOrderedDescending
+        } else if (result == NSOrderedDescending) {
           block(kComparisonResult_Added, nil, otherItem, &stop);
           if (stop) {
-            break;
+            return NO;
           }
+          ++start;
         }
       }
     } else {
       block(kComparisonResult_Removed, item, nil, &stop);
+      if (stop) {
+        return NO;
+      }
     }
   }
   for (NSUInteger i = start; i < end; ++i) {
