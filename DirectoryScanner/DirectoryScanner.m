@@ -319,8 +319,12 @@ static BOOL _CompareFiles(NSString* path1, NSString* path2, void(^errorBlock)(NS
       struct dirent storage;
       struct dirent* entry;
       while(1) {
-        if ((readdir_r(directory, &storage, &entry) != 0) || !entry) {
-          break;
+        if (readdir_r(directory, &storage, &entry) != 0) {
+          CALL_ERROR_BLOCK(@"Failed reading directory", _NSStringFromPath(path));
+          return nil;
+        }
+        if (entry == NULL) {
+          break;  // End of directory
         }
         if ((entry->d_name[0] == '.') && ((entry->d_name[1] == 0) || ((entry->d_name[1] == '.') && (entry->d_name[2] == 0)))) {
           continue;
