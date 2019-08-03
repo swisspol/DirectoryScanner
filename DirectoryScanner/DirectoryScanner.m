@@ -34,6 +34,7 @@
 #import "DirectoryScanner.h"
 
 #define __USE_GETATTRLIST__ 1
+#define __USE_SUBSECOND_DATE_COMPARISONS__ 0  // HFS+ has second precision only and sub-second timestamps are not preserved anymore when duplicating files
 
 #define kFileCompareIOBufferSize (256 * 1024)  // Optimal size seems to be 64 KB for SSDs but 256 KB for HDDs
 #define kResourceForkPath @"..namedfork/rsrc"
@@ -176,12 +177,21 @@ static inline NSDate* NSDateFromTimeSpec(const struct timespec* t) {
   if (_uid != otherItem->_uid) {
     result |= kComparisonResult_Modified_UserID;
   }
+#if __USE_SUBSECOND_DATE_COMPARISONS__
   if ((_created.tv_sec != otherItem->_created.tv_sec) || (_created.tv_nsec != otherItem->_created.tv_nsec)) {
     result |= kComparisonResult_Modified_CreationDate;
   }
   if ((_modified.tv_sec != otherItem->_modified.tv_sec) || (_modified.tv_nsec != otherItem->_modified.tv_nsec)) {
     result |= kComparisonResult_Modified_ModificationDate;
   }
+#else
+  if (_created.tv_sec != otherItem->_created.tv_sec) {
+    result |= kComparisonResult_Modified_CreationDate;
+  }
+  if (_modified.tv_sec != otherItem->_modified.tv_sec) {
+    result |= kComparisonResult_Modified_ModificationDate;
+  }
+#endif
   return result;
 }
 
