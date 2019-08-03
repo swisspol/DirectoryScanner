@@ -555,9 +555,7 @@ static const char* _GetCPathAndAttributes(NSString* path, Attributes* attributes
       dispatch_semaphore_signal(newSemaphore);
     });
     dispatch_semaphore_wait(newSemaphore, DISPATCH_TIME_FOREVER);
-    dispatch_release(newSemaphore);
     dispatch_semaphore_wait(oldSemaphore, DISPATCH_TIME_FOREVER);
-    dispatch_release(oldSemaphore);
   } else {
     oldDirectory = [[DirectoryItem alloc] initWithParent:nil path:oldCPath base:strlen(oldCPath) name:basename((char*)oldCPath) attributes:&oldAttributes excludeBlock:excludeBlock errorBlock:errorBlock];
     newDirectory = [[DirectoryItem alloc] initWithParent:nil path:newCPath base:strlen(newCPath) name:basename((char*)newCPath) attributes:&newAttributes excludeBlock:excludeBlock errorBlock:errorBlock];
